@@ -5,11 +5,442 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
+    <style>
+      h1 {
+        font-size: 24px; 
+        color: rgb(95,105,131);
+      }
+      h2 {
+        font-size: 18px;
+        color: rgb(95,105,131);
+      }
+      .description {
+        font-size: 13px; 
+        color: rgb(95,105,131);
+      }
+      .selections {
+        margin: 15px 0;
+      }
+      .left,
+      .right {
+        width: 50%;
+        float: left;
+      }
+      #sponsor {
+        margin-bottom: 15px;
+        height: 31px;
+      }
+      .sponsor-name-field {
+        color: rgb(95,105,131); 
+        height: 30px; 
+        padding: 0 4px; 
+        font-size: 12px; 
+        border: 1px solid rgb(201,209,219);
+      }
+      .sponsor-submit {
+        font-weight: bold; 
+        color: rgb(95,105,131); 
+        font-size: 12px; 
+        height: 31px; 
+        padding: 0 10px; 
+        margin-left: 10px; 
+        border: 1px solid rgb(201,209,219); 
+        background-color: rgb(242,244,246);
+      }
+      .confirm-text {
+        color: rgb(95,105,131); 
+        font-size: 15px;
+      }
+      #dateSelect,
+      #intervalSelect,
+      #typeSelect {
+        margin: 15px 0;
+        display: block;
+      }
+      .report-chart {
+        margin: 15px 0;
+      }
+      .chart-label {
+        display: none;
+        margin-top: 30px;
+      }
+    </style>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <div class="mixpanel-platform-section">
+      <div class="instructions">
+        <h1>HealthShare Sponsor Report</h1>
+        <p class="description">Please enter a sponsor name before selecting options.</p>
+      </div>
+      <div class="selections">
+        <div class="left">
+          <form id="sponsor">
+            <input type="text" autofocus placeholder="Sponsor Name" name="sponsor-name-field" class="sponsor-name-field" value="">
+            <input type="submit" name="submit" value="Submit" class="sponsor-submit">
+          </form>
+          <div class="confirmation">
+            <p class="confirm-text"></p>
+          </div>
+          <div id="dateSelect"></div>
+          <div id="by" class="mixpanel-platform-label">by</div>
+          <div id="propSelect"></div>
+        </div>
+        <div class="right">
+          <div id="intervalSelect" style="margin-top: 0"></div>
+          <div id="typeSelect"></div>
+          <div id="chartSelect"></div>
+        </div>
+      </div>
+      <div style="clear: both;"></div>
+      <div class="report">
+        <h2 class="chart-label">Fact Sheet Triggers</h2>
+        <div id="sheetListGraph" class="report-chart"></div>
+        <div id="sheetListTable" class="report-chart"></div>
+        <h2 class="chart-label">Fact Sheet Opens</h2>
+        <div id="openSheetGraph" class="report-chart"></div>
+        <div id="openSheetTable" class="report-chart"></div>
+        <h2 class="chart-label">Fact Sheet E-mails</h2>
+        <div id="emailSheetGraph" class="report-chart"></div>
+        <div id="emailSheetTable" class="report-chart"></div>
+      </div>
+    </div>
     <script>
-      // Run queries and display results here
+    
+      // add a date picker and populate dropdowns
+      var dateSelect  = $('#dateSelect').MPDatepicker(),
+          options = {
+            items: [
+              {label: 'Total', value: 'general'},
+              {label: 'Unique', value: 'unique'}
+              ]
+          },
+          options2 = {
+            items: [
+              {label: 'Week', value: 'week'},
+              {label: 'Month', value: 'month'}
+              ]
+          },
+          options3 = {
+            items: [
+              {label: 'Bar', value: 'bar'},
+              {label: 'Line', value: 'line'},
+              {label: 'Pie', value: 'pie'}
+              ]
+          }
+          options4 = {
+            items: [
+              {label: 'None', value: ''},
+              {label: 'Medicare Local', value: 'medicarelocal'}
+              ]
+          }
+          typeSelect = $('#typeSelect').MPSelect(options),
+          intervalSelect = $('#intervalSelect').MPSelect(options2),
+          chartSelect = $('#chartSelect').MPSelect(options3),
+          propSelect = $('#propSelect').MPSelect(options4),
+
+          // set global variable for the sponsor by which we will filter
+          sponsorName = '',
+          
+          // set April 1 and May 1, 2015 dates to avoid any data before those dates
+          apr1 = new Date(2015,3,1,0,0,0,0);
+          may1 = new Date(2015,4,1,0,0,0,0);
+
+      // record search term when sponsor name is submitted
+      $('#sponsor').submit(function(e) {
+        e.preventDefault();
+        sponsorName = $('#sponsor input:first').val();
+        $('.confirm-text').html("Sponsor: <strong>" + sponsorName + "</strong>").css('color', 'rgb(95,105,131)');
+        $('#sponsor input:first').val('');
+        runQuery();
+      });
+
+      // run segmentation queries for 2 events filtered by "sponsor contains [search term]" and segmented by "name"
+      function runQuery() {
+        
+        // return error if no search term was submitted
+        if (!sponsorName) {
+          $('.confirm-text')
+            .html("Error: Please enter a sponsor name above.")
+            .css("color", "red");
+        }
+        
+        // if search term was submitted run function
+        else {
+          
+          // reset html for each new query (necessary for chart type changes)
+          $('.report').html('<h2 class="chart-label">Fact Sheet Triggers</h2><div id="sheetListGraph" class="report-chart"></div><div id="sheetListTable" class="report-chart"></div><h2 class="chart-label">Fact Sheet Opens</h2><div id="openSheetGraph" class="report-chart"></div><div id="openSheetTable" class="report-chart"></div><h2 class="chart-label">Fact Sheet E-mails</h2><div id="emailSheetGraph" class="report-chart"></div><div id="emailSheetTable" class="report-chart"></div>');
+          
+          // grab values from dropdowns and set up tables
+          var dates = dateSelect.MPDatepicker('value'),
+              dateRange = {},
+              listDateRange = {},
+              typeName = typeSelect.MPSelect('value'),
+              intervalType = intervalSelect.MPSelect('value'),
+              chartTypeVal = chartSelect.MPSelect('value'),
+              multiSegType = propSelect.MPSelect('value'),
+              openSheetTable = $('#openSheetTable').MPTable({
+                firstColHeader: 'Name'
+              }),
+              sheetListTable = $('#sheetListTable').MPTable({
+                firstColHeader: 'Name'
+              });
+              emailSheetTable = $('#emailSheetTable').MPTable({
+                firstColHeader: 'Name'
+              });
+              
+          dateRange['from'] = dates.from;
+          dateRange['to'] = dates.to;
+          listDateRange['from'] = dates.from;
+          listDateRange['to'] = dates.to;
+              
+          // restrict from date to April 1, 2015 for sheetList and May 1, 2015 for other events
+          if ( listDateRange.from < apr1 ) {
+            listDateRange.from = apr1;
+          }
+          if ( dateRange.from < may1 ) {
+            dateRange.from = may1;
+          }
+
+          // if city or state is selected as a second dimension, set up stacked bar charts
+          if (multiSegType) {
+
+            // find interval for bar chart 'interval' param
+            getInterval = function(dates) {
+              intervalDays = Math.ceil((dates.to - dates.from) / (24 * 60 * 60 * 1000)) + 1
+              return intervalDays
+            }
+
+            var endpoint = '/api/2.0/segmentation/multiseg',
+                params =  $.extend({}, {
+                  "type": typeName,
+                  "inner": "properties[\"" + multiSegType + "\"]",
+                }),
+                propertyMap = {
+                  'openSheet': 'sponsor', 
+                  'sheetList': 'sponsors', 
+                  'emailSheet': 'sponsor', 
+                  'HCN Fact Sheet Widget v1.0: openSheet': 'sheet_sponsor',
+                  'HCN Fact Sheet Widget v1.0: sheetList': 'sheet_sponsor',
+                  'HCN Fact Sheet Widget v1.0: sendEmail': 'sheet_sponsor'
+                },
+
+                // set up stacked bar graphs
+                openSheetGraph = $('#openSheetGraph').MPChart({chartType: 'bar', stacked: true, highchartsOptions: {
+                    tooltip: {
+                        backgroundColor: '#fffce7'  // Make tooltip background yellow
+                    }
+                }}),
+                sheetListGraph = $('#sheetListGraph').MPChart({chartType: 'bar', stacked: true, highchartsOptions: {
+                    tooltip: {
+                        backgroundColor: '#fffce7'  // Make tooltip background yellow
+                    }
+                }}),
+                emailSheetGraph = $('#emailSheetGraph').MPChart({chartType: 'bar', stacked: true, highchartsOptions: {
+                    tooltip: {
+                        backgroundColor: '#fffce7'  // Make tooltip background yellow
+                    }
+                }});
+                
+            // query an event segmented by 2 properties and reorganize the data for a stacked bar chart
+            function multiquery(endpoint, event1, prop1, event2, prop2, date, graph, table) {
+              var params1 = $.extend({}, params, date, {
+                    "event": event1, 
+                    "outer": "properties[\"" + prop1 + "\"]", 
+                    "interval": getInterval(dateRange),
+                    "where": "\"" + sponsorName + "\" in string(properties[\"" + propertyMap[event1] + "\"])"
+                  }),
+                  params2 = $.extend({}, params, date, {
+                    "event": event2, 
+                    "outer": "properties[\"" + prop2 + "\"]", 
+                    "interval": getInterval(dateRange),
+                    "where": "\"" + sponsorName + "\" in string(properties[\"" + propertyMap[event2] + "\"])"
+                  });
+                  
+              MP.api.query(endpoint, params1).done(function(results1) {
+                MP.api.query(endpoint, params2).done(function(results2) {
+                  var output = {},
+                      query = results1["data"]["values"],
+                      query2 = results2["data"]["values"];
+                  
+                  _.each(_.keys(query), function(properties){
+                    var property = query[properties]
+                    
+                    _.each(_.keys(property), function(propertiesTwo){
+                      if (!output[propertiesTwo]) {
+                        output[propertiesTwo] = {}
+                      }
+                      var propertyTwo = property[propertiesTwo]
+                      var sum = 0;
+                    
+                      _.each(_.keys(propertyTwo), function(dates){
+                        sum = sum + propertyTwo[dates]
+                      });
+                      
+                      output[propertiesTwo][properties] = sum;
+                      
+                    });
+                  });
+
+                  _.each(_.keys(query2), function(properties){
+                    var property = query2[properties]
+                    
+                    _.each(_.keys(property), function(propertiesTwo){
+                      if (!output[propertiesTwo]) {
+                        output[propertiesTwo] = {}
+                      }
+                      var propertyTwo = property[propertiesTwo]
+                      var sum = 0;
+                    
+                      _.each(_.keys(propertyTwo), function(dates){
+                        sum = sum + propertyTwo[dates]
+                      });
+                      
+                      output[propertiesTwo][properties] = sum;
+                      
+                    });
+                  });
+
+                  //create graph and table
+                  graph.MPChart('setData', output);
+                  table.MPTable('setData', output);
+
+                });
+              });
+            };
+            
+            // run queries for each event and populate graphs and tables
+            multiquery(endpoint, 'openSheet', 'name', 'HCN Fact Sheet Widget v1.0: openSheet', 'sheet_name', dateRange, openSheetGraph, openSheetTable);
+            multiquery(endpoint, 'sheetList', 'names', 'HCN Fact Sheet Widget v1.0: sheetList', 'sheet_name', listDateRange, sheetListGraph, sheetListTable);
+            multiquery(endpoint, 'emailSheet', 'name', 'HCN Fact Sheet Widget v1.0: sendEmail', 'sheet_name', dateRange, emailSheetGraph, emailSheetTable);
+          }
+          
+          // if no second dimension (city or state) is selected, set up charts according to chart type selection
+          else {
+            var params = {
+                  from: dateRange.from,
+                  to: dateRange.to,
+                  type: typeName,
+                  unit: intervalType,
+                },
+                sheetListParams = {
+                  from: listDateRange.from,
+                  to: listDateRange.to,
+                  type: typeName,
+                  unit: intervalType,
+                },
+                propertyMap = {
+                  'openSheet': 'sponsor', 
+                  'sheetList': 'sponsors', 
+                  'emailSheet': 'sponsor', 
+                  'HCN Fact Sheet Widget v1.0: openSheet': 'sheet_sponsor',
+                  'HCN Fact Sheet Widget v1.0: sheetList': 'sheet_sponsor',
+                  'HCN Fact Sheet Widget v1.0: sendEmail': 'sheet_sponsor'
+                },
+
+                // set up graphs (according to chart type selection)
+                openSheetGraph = $('#openSheetGraph').MPChart({chartType: chartTypeVal, highchartsOptions: {
+                    tooltip: {
+                        backgroundColor: '#fffce7'  // Make tooltip background yellow
+                    }
+                }}),
+                sheetListGraph = $('#sheetListGraph').MPChart({chartType: chartTypeVal, highchartsOptions: {
+                    tooltip: {
+                        backgroundColor: '#fffce7'  // Make tooltip background yellow
+                    }
+                }});
+                emailSheetGraph = $('#emailSheetGraph').MPChart({chartType: chartTypeVal, highchartsOptions: {
+                    tooltip: {
+                        backgroundColor: '#fffce7'  // Make tooltip background yellow
+                    }
+                }});
+                
+            // run segmentation queries and populate graphs and tables
+            
+            function mpquery(params, event1, property1, event2, property2, graph, table) {
+              var params1 = $.extend({}, params, {
+                    "where": "\"" + sponsorName + "\" in string(properties[\"" + propertyMap[event1] + "\"])"
+                  }),
+                  params2 = $.extend({}, params, {
+                    "where": "\"" + sponsorName + "\" in string(properties[\"" + propertyMap[event2] + "\"])"
+                  });
+              MP.api.segment(event1, property1, params1).done(function(results1) {
+                MP.api.segment(event2, property2, params2).done(function(results2) {
+                  var newResults = $.extend({}, results1.values(), results2.values());
+                  graph.MPChart('setData', newResults);
+                  table.MPTable('setData', newResults);
+                });
+              });
+            };
+            
+            // run segmentation queries and populate graphs and tables specifically for OpenSheets
+            
+            function mpqueryOpenSheet(event1, property1, event2, property2, graph, table) {
+              var params1 = $.extend({}, params, {
+                    "where": "\"" + sponsorName + "\" in string(properties[\"" + propertyMap[event1] + "\"])"
+                  }),
+                  params2 = $.extend({}, params, {
+                    "where": "\"" + sponsorName + "\" in string(properties[\"" + propertyMap[event2] + "\"])"
+                  });
+              MP.api.segment(event1, property1, params1).done(function(results1) {
+                MP.api.segment(event2, property2, params2).done(function(results2) {
+                  var data1 = results1.values();
+                  var data2 = results2.values();
+                  
+                  _.each(_.keys(data2), function(properties){
+                    var dateValues = data2[properties];
+                    var property = properties;
+                    
+                    _.each(_.keys(dateValues), function(date){
+                      var value = dateValues[date];
+                      console.log(data1[property][date]);
+                      data1[property][date] += value;
+                      console.log(data1[property][date]);
+                    });
+                  });
+                  
+                  graph.MPChart('setData', data1);
+                  table.MPTable('setData', data1);
+                });
+              });
+            };
+            
+            mpqueryOpenSheet(params, 'openSheet', 'name', 'HCN Fact Sheet Widget v1.0: openSheet', 'sheet_name', openSheetGraph, openSheetTable);
+            mpquery(sheetListParams, 'sheetList', 'names', 'HCN Fact Sheet Widget v1.0: sheetList', 'sheet_name', sheetListGraph, sheetListTable);
+            mpquery(params, 'emailSheet', 'name', 'HCN Fact Sheet Widget v1.0: sendEmail', 'sheet_name', emailSheetGraph, emailSheetTable);
+          }
+          
+          $('.chart-label').show();
+        }
+      };
+      
+      // set functions to run when dropdowns change
+      dateSelect.on('change', function() {
+        runQuery();
+      });
+      typeSelect.on('change', function() {
+        runQuery();
+      });
+      intervalSelect.on('change', function() {
+        runQuery();
+      });
+      chartSelect.on('change', function() {
+        runQuery();
+      });
+      propSelect.on('change', function() {
+        if ( $(this).MPSelect('value') != '' ) {
+          // chart and interval selections are not relevant in a stacked bar chart
+          $('#chartSelect').hide();
+          $('#intervalSelect').hide();
+          $('#typeSelect').css('margin-top', '0');
+        }
+        else {
+          $('#chartSelect').show();
+          $('#intervalSelect').show();
+          $('#typeSelect').css('margin-top', '15px');
+        }
+        runQuery();
+      });
+      
     </script>
   </body>
 </html>
