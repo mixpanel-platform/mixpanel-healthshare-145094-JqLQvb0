@@ -385,7 +385,7 @@
                 MP.api.segment(event2, property2, params2).done(function(results2) {
                   var data1 = results1.values();
                   var data2 = results2.values();
-                  
+                  // append data2 values to data1
                   _.each(_.keys(data2), function(properties){
                     var dateValues = data2[properties];
                     var property = properties;
