@@ -378,6 +378,9 @@
                     
                     _.each(_.keys(dateValues), function(date){
                       var value = dateValues[date];
+                      if (!data1[property][date]) {
+                        data1[property][date] = 0;
+                      };
                       data1[property][date] += value;
                     });
                   });
