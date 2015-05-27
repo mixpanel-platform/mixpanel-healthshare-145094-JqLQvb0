@@ -371,6 +371,9 @@
                   _.each(_.keys(data2), function(properties){
                     var dateValues = data2[properties];
                     var property = properties;
+                    if (!data1[property]) {
+                      data1[property] = {};
+                    }
                     
                     _.each(_.keys(dateValues), function(date){
                       var value = dateValues[date];
