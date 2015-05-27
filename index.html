@@ -365,12 +365,25 @@
                   });
               MP.api.segment(event1, property1, params1).done(function(results1) {
                 MP.api.segment(event2, property2, params2).done(function(results2) {
-                  var newResults = $.extend({}, results1.values(), results2.values());
-                  graph.MPChart('setData', newResults);
-                  table.MPTable('setData', newResults);
+                  var data1 = results1.values();
+                  var data2 = results2.values();
+                  
+                  _.each(_.keys(data2), function(properties){
+                    var dateValues = data2[properties];
+                    var property = properties;
+                    
+                    _.each(_.keys(dateValues), function(date){
+                      var value = dateValues[date];
+                      data1[property][date] += value;
+                    });
+                  });
+                  
+                  graph.MPChart('setData', data1);
+                  table.MPTable('setData', data1);
                 });
               });
-            }
+            };
+                
             
             mpquery(params, 'openSheet', 'name', 'HCN Fact Sheet Widget v1.0: openSheet', 'sheet_name', openSheetGraph, openSheetTable);
             mpquery(sheetListParams, 'sheetList', 'names', 'HCN Fact Sheet Widget v1.0: sheetList', 'sheet_name', sheetListGraph, sheetListTable);
